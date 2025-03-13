@@ -1,8 +1,8 @@
 /*
  * This is a RDMA server side code. 
  *
- * Author: Fucheng Warren Zhu 
- *         wzu@college.harvard.edu
+ * Authors: Henry Huang and Fucheng Warren Zhu 
+ *         hhuang@college.harvard.edu wzu@college.harvard.edu
  *
  * This code is adapted from the example code provided by Animesh Trivedi
  * and can be found at https://github.com/apache/rdma-core/blob/master/examples/rdma_server.c
@@ -26,6 +26,7 @@
  static struct ibv_send_wr server_send_wr, *bad_server_send_wr = NULL;
  static struct ibv_sge client_recv_sge, server_send_sge;
  int NUM_CONNECTIONS = 11;
+ void *gpu_buf = NULL;
  /* Starts an RDMA server by allocating basic connection resources 
   * Uses PS_TCP for the Port
   * The purpose of this function is to create a connection identifier (cm_server_id) and bind it to the server address.
@@ -330,21 +331,36 @@
      printf("Client side buffer information is received...\n");
      show_rdma_buffer_attr(&client_metadata_attr);
      printf("The client has requested buffer length of : %u bytes \n", 
-             client_metadata_attr.length);
-     /* We need to setup requested memory buffer. This is where the client will 
-     * do RDMA READs and WRITEs. */
-     server_buffer_mr = rdma_buffer_alloc(pd /* which protection domain */, 
-             client_metadata_attr.length /* what size to allocate */, 
-             (enum ibv_access_flags)(
-             IBV_ACCESS_LOCAL_WRITE|
-             IBV_ACCESS_REMOTE_READ|
-             IBV_ACCESS_REMOTE_WRITE
-             ) /* access permissions */);
-     if(!server_buffer_mr){
-         rdma_error("Server failed to create a buffer \n");
-         /* we assume that it is due to out of memory error */
-         return -ENOMEM;
-     }
+    client_metadata_attr.length);
+    cudaError_t cerr = cudaMalloc((void **)&gpu_buf, client_metadata_attr.length);
+    if (cerr != cudaSuccess) {
+        rdma_error("cudaMalloc failed: %s\n", cudaGetErrorString(cerr));
+        return -1; // handle error
+    }
+    
+    server_buffer_mr = ibv_reg_mr(pd, gpu_buf, client_metadata_attr.length,
+                                IBV_ACCESS_LOCAL_WRITE |
+                                IBV_ACCESS_REMOTE_READ |
+                                IBV_ACCESS_REMOTE_WRITE);
+    if (!server_buffer_mr) {
+        rdma_error("ibv_reg_mr failed for GPU buffer, errno: %d\n", -errno);
+        cudaFree(gpu_buf);
+        return -1;
+    }
+    //  /* We need to setup requested memory buffer. This is where the client will 
+    //  * do RDMA READs and WRITEs. */
+    //  server_buffer_mr = rdma_buffer_alloc(pd /* which protection domain */, 
+    //          client_metadata_attr.length /* what size to allocate */, 
+    //          (enum ibv_access_flags)(
+    //          IBV_ACCESS_LOCAL_WRITE|
+    //          IBV_ACCESS_REMOTE_READ|
+    //          IBV_ACCESS_REMOTE_WRITE
+    //          ) /* access permissions */);
+    //  if(!server_buffer_mr){
+    //      rdma_error("Server failed to create a buffer \n");
+    //      /* we assume that it is due to out of memory error */
+    //      return -ENOMEM;
+    //  }
      /* This buffer is used to transmit information about the above 
      * buffer to the client. So this contains the metadata about the server 
      * buffer. Hence this is called metadata buffer. Since this is already 
@@ -440,9 +456,15 @@
          // we continue anyways;
      }
      /* Destroy memory buffers */
-     rdma_buffer_free(server_buffer_mr);
+    //  rdma_buffer_free(server_buffer_mr);
+    if (server_buffer_mr) {
+        ibv_dereg_mr(server_buffer_mr);
+        server_buffer_mr = NULL;
+    }
+    cudaFree(gpu_buf);	
+    gpu_buf = NULL;
      rdma_buffer_deregister(server_metadata_mr);	
-     rdma_buffer_deregister(client_metadata_mr);	
+     rdma_buffer_deregister(client_metadata_mr);
      /* Destroy protection domain */
      ret = ibv_dealloc_pd(pd);
      if (ret) {

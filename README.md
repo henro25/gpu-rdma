@@ -60,18 +60,16 @@ make
 ```
 ###### client
 ```text
-atr@atr:~/rdma-example$ ./bin/rdma_client -a 127.0.0.1 -s textstring 
-Passed string is : textstring , with count 10 
+atr@atr:~/gpu-rdma$ ./bin/rdma_client -a 127.0.0.1
+=== Testing buffer size: 1048576 bytes ===
 Trying to connect to server at : 127.0.0.1 port: 20886 
 The client is connected successfully 
 ---------------------------------------------------------
-buffer attr, addr: 0x5629832e22c0 , len: 10 , stag : 0x1617b400 
+buffer attr, addr: 0x7fb6eb200000 , len: 1048576 , stag : 0xb1d3 
 ---------------------------------------------------------
 ...
-SUCCESS, source and destination buffers match 
 Client resource clean up is complete 
-atr@atr:~/rdma-example$ 
-
+atr@atr:~/gpu-rdma$ 
 ```
 
 ## Does not have an RDMA device?

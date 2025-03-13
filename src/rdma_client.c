@@ -1,7 +1,11 @@
 /*
- * An example RDMA client side code. 
- * Author: Animesh Trivedi 
- *         atrivedi@apache.org
+ * This is a RDMA server side code. 
+ *
+ * Authors: Henry Huang 
+ *         hhuang@college.harvard.edu
+ *
+ * This code is adapted from the example code provided by Animesh Trivedi
+ * and can be found at https://github.com/apache/rdma-core/blob/master/examples/rdma_server.c
  */
 #define _POSIX_C_SOURCE 199309L
 #include "rdma_common.h"
@@ -34,10 +38,22 @@ static struct ibv_sge client_send_sge, server_recv_sge;
 static char *src = NULL, *dst = NULL; 
 
 /* This is our testing function */
-static int check_src_dst() 
-{
-	return memcmp((void*) src, (void*) dst, xfer_size);
-	// return memcmp((void*) src, (void*) dst, strlen(src));
+static int check_src_dst() {
+    // 1) Allocate a small host buffer
+    void *h_src = malloc(xfer_size);
+    void *h_dst = malloc(xfer_size);
+
+    // 2) Copy from device to host
+    cudaMemcpy(h_src, src, xfer_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_dst, dst, xfer_size, cudaMemcpyDeviceToHost);
+
+    // 3) Compare on the CPU side
+    int diff = memcmp(h_src, h_dst, xfer_size);
+
+    // 4) Clean up
+    free(h_src);
+    free(h_dst);
+    return diff;
 }
 
 /* This function prepares client side connection resources for an RDMA connection */
@@ -255,7 +271,7 @@ static int client_xchange_metadata_with_server()
 {
 	struct ibv_wc wc[2];
 	int ret = -1;
-	client_src_mr = rdma_buffer_register(pd,
+	client_src_mr = ibv_reg_mr(pd,
 			src,
 			xfer_size,
 			(IBV_ACCESS_LOCAL_WRITE|
@@ -321,7 +337,7 @@ static int client_remote_memory_ops()
 {
 	struct ibv_wc wc;
 	int ret = -1;
-	client_dst_mr = rdma_buffer_register(pd,
+	client_dst_mr = ibv_reg_mr(pd,
 			dst,
 			xfer_size,
 			(enum ibv_access_flags)(IBV_ACCESS_LOCAL_WRITE | 
@@ -451,8 +467,8 @@ static int client_disconnect_and_clean()
 	rdma_buffer_deregister(client_src_mr);	
 	rdma_buffer_deregister(client_dst_mr);	
 	/* We free the buffers */
-	free(src);
-	free(dst);
+	cudaFree(src);
+	cudaFree(dst);
 	/* Destroy protection domain */
 	ret = ibv_dealloc_pd(pd);
 	if (ret) {
@@ -521,14 +537,26 @@ int main(int argc, char **argv) {
         printf("\n=== Testing buffer size: %zu bytes ===\n", xfer_size);
 
         /* Allocate src and dst for this size */
-        src = calloc(1, xfer_size);
-        dst = calloc(1, xfer_size);
+		cudaError_t cerr;
+		cerr = cudaMalloc((void **)&src, xfer_size);
+		if (cerr != cudaSuccess) {
+			rdma_error("cudaMalloc for src failed: %s\n", cudaGetErrorString(cerr));
+			return -1;
+		}
+		cerr = cudaMalloc((void **)&dst, xfer_size);
+		if (cerr != cudaSuccess) {
+			rdma_error("cudaMalloc for dst failed: %s\n", cudaGetErrorString(cerr));
+			cudaFree(src);
+			return -1;
+		}
+        // src = calloc(1, xfer_size);
+        // dst = calloc(1, xfer_size);
         if (!src || !dst) {
             rdma_error("Failed to allocate src/dst for size %zu\n", xfer_size);
             return -ENOMEM;
         }
         /* Optional: fill src with a known pattern so we can verify data */
-        memset(src, 0xAB, xfer_size);
+        cudaMemset(src, 0xAB, xfer_size);
 
         /* Prepare connection */
         ret = client_prepare_connection(&server_sockaddr);

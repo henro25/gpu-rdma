@@ -25,6 +25,7 @@
  
  #include <rdma/rdma_cma.h>
  #include <infiniband/verbs.h>
+ #include <cuda_runtime.h>
  
  /* Error Macro*/
  #define rdma_error(msg, args...) do {\

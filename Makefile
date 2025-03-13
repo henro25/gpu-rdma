@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -O2 -Ofast -ffast-math -funroll-loops -march=native
 LDFLAGS = -pthread
-LIBS = -libverbs -lrdmacm
+LIBS = -libverbs -lrdmacm -lcudart
 
 # Directories
 SRC_DIR = src
