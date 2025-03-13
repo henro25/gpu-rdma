@@ -294,7 +294,7 @@
                 RDMA_CM_EVENT_ESTABLISHED,
                 &cm_event);
          if (ret) {
-         rdma_error("Failed to get the cm event, errnp: %d \n", -errno);
+         rdma_error("Failed to get the cm event, errno: %d \n", -errno);
          return -errno;
      }
      /* We acknowledge the event */
@@ -398,7 +398,7 @@
              &server_send_wr /* Send request that we prepared before */, 
              &bad_server_send_wr /* In case of error, this will contain failed requests */);
      if (ret) {
-         rdma_error("Posting of server metdata failed, errno: %d \n",
+         rdma_error("Posting of server metadata failed, errno: %d \n",
                  -errno);
          return -errno;
      }

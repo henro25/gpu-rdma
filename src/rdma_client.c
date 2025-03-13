@@ -331,7 +331,7 @@ static int client_xchange_metadata_with_server()
 /* This function does :
  * 1) Prepare memory buffers for RDMA operations 
  * 1) RDMA write from src -> remote buffer 
- * 2) RDMA read from remote bufer -> dst
+ * 2) RDMA read from remote buffer -> dst
  */ 
 static int client_remote_memory_ops() 
 {
