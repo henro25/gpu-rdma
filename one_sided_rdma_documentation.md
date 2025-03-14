@@ -135,3 +135,18 @@ static int setup_client_resources()
 	 * A completion channel is also tied to an RDMA device, hence we will 
 	 * use cm_client_id->verbs. 
 	 */
+
+## Changes to CPU RDMA
+
+1. **GPU Memory Allocation (Client & Server):**
+   1. Replaced `calloc()` / `rdma_buffer_alloc()` calls with `cudaMalloc(...)`.
+   2. Replaced direct CPU `memset()` with `cudaMemset()`.
+   3. Replaced `rdma_buffer_register(...)` with `ibv_reg_mr(...)` directly on the GPU pointer.
+2. **CPU–Side Buffer Checks:**
+   1. On the client side, replaced the direct `memcmp(src, dst, xfer_size)` with a helper that copies memory from GPU to CPU (using `cudaMemcpy`) and then does `memcmp` on the CPU side.
+3. **Cleaning Up Properly (Server & Client):**
+   1. Removed `rdma_buffer_free(server_buffer_mr);` for GPU pointers because that calls `free(...)`. Instead:
+      1. `ibv_dereg_mr(...)` to deregister the memory region.
+      2. `cudaFree(...)` to free the device pointer.
+4. **Include CUDA Header:**
+   1. Added `#include <cuda_runtime.h>` in `rdma_common.h`.
